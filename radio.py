@@ -302,7 +302,7 @@ class RadioDisplay:
         self.BAND_ACTIVE = (255, 200, 80)
         self.BAND_INACTIVE = (80, 75, 65)
 
-    def draw(self, band, bands, signal_strength, station_name):
+    def draw(self, band, bands, signal_strength, station_name, volume):
         self.screen.fill(self.BG)
 
         # --- Band selector ---
@@ -376,8 +376,22 @@ class RadioDisplay:
             name_surf = self.font_med.render(station_name, True, name_color)
             self.screen.blit(name_surf, (WINDOW_W // 2 - name_surf.get_width() // 2, 260))
 
+        # --- Volume meter ---
+        vol_x = WINDOW_W - 200
+        vol_label = self.font_sm.render("VOLUME", True, self.TEXT_DIM)
+        self.screen.blit(vol_label, (vol_x, 270))
+        vol_bar_w = 150
+        vol_bar_h = 12
+        vol_bar_y = 292
+        pygame.draw.rect(self.screen, self.SIGNAL_OFF, (vol_x, vol_bar_y, vol_bar_w, vol_bar_h), border_radius=3)
+        fill_w = int(vol_bar_w * volume)
+        if fill_w > 0:
+            pygame.draw.rect(self.screen, self.FREQ_COLOR, (vol_x, vol_bar_y, fill_w, vol_bar_h), border_radius=3)
+        vol_pct = self.font_sm.render(f"{int(volume * 100)}%", True, self.TEXT_DIM)
+        self.screen.blit(vol_pct, (vol_x + vol_bar_w + 8, vol_bar_y - 2))
+
         # --- Controls hint ---
-        hint = self.font_sm.render("[<] [>] strojenie    [Tab] zakres    [ESC] wyjscie", True, (80, 75, 65))
+        hint = self.font_sm.render("[<] [>] strojenie  [^] [v] glosnosc  [Tab] zakres  [ESC] wyjscie", True, (80, 75, 65))
         self.screen.blit(hint, (WINDOW_W // 2 - hint.get_width() // 2, WINDOW_H - 30))
 
         pygame.display.flip()
@@ -464,6 +478,10 @@ def main():
                         mixer.active_band = active_band
                         tuning_direction = 0
                         hold_started = False
+                    elif event.key == pygame.K_UP:
+                        mixer._volume = min(1.0, round(mixer._volume + 0.05, 2))
+                    elif event.key == pygame.K_DOWN:
+                        mixer._volume = max(0.0, round(mixer._volume - 0.05, 2))
                     elif event.key == pygame.K_LEFT:
                         tuning_direction = -1
                         active_band.current_freq = max(
@@ -518,14 +536,15 @@ def main():
 
             # Draw
             if display:
-                display.draw(active_band, bands, best_signal, best_name)
+                display.draw(active_band, bands, best_signal, best_name, mixer._volume)
             else:
-                state = (active_band.key, active_band.current_freq)
+                state = (active_band.key, active_band.current_freq, mixer._volume)
                 if state != last_printed_state:
                     sig_bar = "#" * int(best_signal * 15)
                     station_info = f"  [{best_name}]" if best_signal > 0.3 else ""
                     freq_str = f"{active_band.format_freq()} {active_band.unit}"
-                    print(f"\r  [{active_band.key}] {freq_str:>12}  |{sig_bar:<15}|{station_info}     ", end="", flush=True)
+                    vol_pct = int(mixer._volume * 100)
+                    print(f"\r  [{active_band.key}] {freq_str:>12}  |{sig_bar:<15}| VOL:{vol_pct:>3}%{station_info}     ", end="", flush=True)
                     last_printed_state = state
 
     except KeyboardInterrupt:
