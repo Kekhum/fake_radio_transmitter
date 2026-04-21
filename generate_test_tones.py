@@ -38,7 +38,13 @@ def generate_tone_wav(filename, freq_hz, duration=DURATION):
 
 if __name__ == "__main__":
     os.makedirs(BASE_DIR, exist_ok=True)
+    # FM
     generate_tone_wav("radio_wolnosc.wav", 440)      # A4 — 91.2 MHz
     generate_tone_wav("audycja_nocna.wav", 330)       # E4 — 97.5 MHz
     generate_tone_wav("wiadomosci.wav", 523)          # C5 — 103.8 MHz
-    print("Gotowe! Zmien rozszerzenia w stations.json na .wav lub podmien na prawdziwe MP3.")
+    # AM
+    generate_tone_wav("polskie_radio.wav", 261)       # C4 — 756 kHz
+    generate_tone_wav("radio_moskwa.wav", 196)        # G3 — 1143 kHz
+    # LW
+    generate_tone_wav("program_1.wav", 349)           # F4 — 225 kHz
+    print("Gotowe! Podmien pliki na prawdziwe nagrania.")

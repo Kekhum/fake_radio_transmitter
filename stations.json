@@ -1,33 +1,99 @@
 {
-    "stations": [
+    "bands": [
         {
-            "name": "Radio Wolnosc",
-            "frequency": 91.2,
-            "file": "music/radio_wolnosc.wav",
-            "bandwidth": 0.3,
-            "loop": true,
-            "loop_delay": 0
+            "name": "UKF (FM)",
+            "key": "FM",
+            "unit": "MHz",
+            "min_freq": 87.5,
+            "max_freq": 108.0,
+            "step": 0.1,
+            "start_freq": 87.5,
+            "freq_format": ".1f",
+            "dial_major_step": 2,
+            "dial_minor_step": 1,
+            "dial_range_start": 88,
+            "dial_range_end": 108,
+            "stations": [
+                {
+                    "name": "Radio Wolnosc",
+                    "frequency": 91.2,
+                    "file": "music/radio_wolnosc.wav",
+                    "bandwidth": 0.3,
+                    "loop": true,
+                    "loop_delay": 0
+                },
+                {
+                    "name": "Audycja Nocna",
+                    "frequency": 97.5,
+                    "file": "music/audycja_nocna.wav",
+                    "bandwidth": 0.3,
+                    "loop": true,
+                    "loop_delay": 120
+                },
+                {
+                    "name": "Wiadomosci",
+                    "frequency": 103.8,
+                    "file": "music/wiadomosci.wav",
+                    "bandwidth": 0.3,
+                    "loop": false
+                }
+            ]
         },
         {
-            "name": "Audycja Nocna",
-            "frequency": 97.5,
-            "file": "music/audycja_nocna.wav",
-            "bandwidth": 0.3,
-            "loop": true,
-            "loop_delay": 120
+            "name": "SRE (AM)",
+            "key": "AM",
+            "unit": "kHz",
+            "min_freq": 530,
+            "max_freq": 1600,
+            "step": 9,
+            "start_freq": 530,
+            "freq_format": ".0f",
+            "dial_major_step": 200,
+            "dial_minor_step": 100,
+            "dial_range_start": 600,
+            "dial_range_end": 1600,
+            "stations": [
+                {
+                    "name": "Polskie Radio",
+                    "frequency": 756,
+                    "file": "music/polskie_radio.wav",
+                    "bandwidth": 15,
+                    "loop": true,
+                    "loop_delay": 0
+                },
+                {
+                    "name": "Radio Moskwa",
+                    "frequency": 1143,
+                    "file": "music/radio_moskwa.wav",
+                    "bandwidth": 15,
+                    "loop": true,
+                    "loop_delay": 0
+                }
+            ]
         },
         {
-            "name": "Wiadomosci",
-            "frequency": 103.8,
-            "file": "music/wiadomosci.wav",
-            "bandwidth": 0.3,
-            "loop": false
+            "name": "DLU (LW)",
+            "key": "LW",
+            "unit": "kHz",
+            "min_freq": 150,
+            "max_freq": 280,
+            "step": 1,
+            "start_freq": 150,
+            "freq_format": ".0f",
+            "dial_major_step": 20,
+            "dial_minor_step": 10,
+            "dial_range_start": 150,
+            "dial_range_end": 280,
+            "stations": [
+                {
+                    "name": "Program 1",
+                    "frequency": 225,
+                    "file": "music/program_1.wav",
+                    "bandwidth": 5,
+                    "loop": true,
+                    "loop_delay": 0
+                }
+            ]
         }
-    ],
-    "tuning": {
-        "min_freq": 87.5,
-        "max_freq": 108.0,
-        "step": 0.1,
-        "start_freq": 87.5
-    }
+    ]
 }
