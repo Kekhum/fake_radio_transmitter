@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.pyo
+.claude/
+music/*.wav
+music/*.mp3
+music/*.ogg

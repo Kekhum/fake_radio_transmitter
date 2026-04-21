@@ -1,0 +1,28 @@
+{
+    "stations": [
+        {
+            "name": "Radio Wolnosc",
+            "frequency": 91.2,
+            "file": "music/radio_wolnosc.wav",
+            "bandwidth": 0.3
+        },
+        {
+            "name": "Audycja Nocna",
+            "frequency": 97.5,
+            "file": "music/audycja_nocna.wav",
+            "bandwidth": 0.3
+        },
+        {
+            "name": "Wiadomosci",
+            "frequency": 103.8,
+            "file": "music/wiadomosci.wav",
+            "bandwidth": 0.3
+        }
+    ],
+    "tuning": {
+        "min_freq": 87.5,
+        "max_freq": 108.0,
+        "step": 0.1,
+        "start_freq": 87.5
+    }
+}
