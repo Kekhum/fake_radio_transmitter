@@ -91,14 +91,18 @@ class NoiseGenerator:
 # Station — wraps a pygame Sound with streaming position
 # ---------------------------------------------------------------------------
 class Station:
-    def __init__(self, name, frequency, filepath, bandwidth=0.3):
+    def __init__(self, name, frequency, filepath, bandwidth=0.3, loop=True, loop_delay=0):
         self.name = name
         self.freq = frequency
         self.bandwidth = bandwidth
         self.filepath = filepath
+        self.loop = loop                # False = play once then go silent
+        self.loop_delay = loop_delay    # seconds of silence between loops
         self.loaded = False
         self.sound_array = None  # numpy float32 array (frames, channels)
         self.play_pos = 0
+        self._finished = False          # True when loop=False and track ended
+        self._delay_remaining = 0       # frames of silence left before next loop
         self._load()
 
     def _load(self):
@@ -126,29 +130,68 @@ class Station:
         except Exception as e:
             print(f"[ERR] Nie mozna zaladowac {self.filepath}: {e}")
 
+    def _handle_track_end(self):
+        """Handle what happens when playback reaches the end of the track."""
+        if not self.loop:
+            self._finished = True
+            self.play_pos = len(self.sound_array)  # park at end
+        elif self.loop_delay > 0:
+            self._delay_remaining = int(self.loop_delay * SAMPLE_RATE)
+            self.play_pos = 0
+        else:
+            self.play_pos = 0
+
+    @property
+    def is_silent(self):
+        return not self.loaded or self._finished or self._delay_remaining > 0
+
     def advance(self, n_frames):
         """Advance playback position without returning audio (background playback)."""
-        if not self.loaded:
+        if not self.loaded or self._finished:
             return
-        self.play_pos = (self.play_pos + n_frames) % len(self.sound_array)
+        if self._delay_remaining > 0:
+            self._delay_remaining = max(0, self._delay_remaining - n_frames)
+            return
+        new_pos = self.play_pos + n_frames
+        total = len(self.sound_array)
+        if new_pos >= total:
+            self._handle_track_end()
+            if not self._finished and self._delay_remaining == 0:
+                self.play_pos = new_pos % total
+        else:
+            self.play_pos = new_pos
 
     def get_frames(self, n_frames):
-        """Return (n_frames, 2) float32, looping. Also advances play_pos."""
-        if not self.loaded:
+        """Return (n_frames, 2) float32. Respects loop/delay settings."""
+        if not self.loaded or self._finished:
             return np.zeros((n_frames, 2), dtype=np.float32)
+
+        out = np.zeros((n_frames, 2), dtype=np.float32)
         total = len(self.sound_array)
-        out = np.empty((n_frames, 2), dtype=np.float32)
         remaining = n_frames
         write_pos = 0
+
         while remaining > 0:
+            # If in delay gap, fill with silence
+            if self._delay_remaining > 0:
+                silence = min(remaining, self._delay_remaining)
+                self._delay_remaining -= silence
+                write_pos += silence
+                remaining -= silence
+                continue
+
             avail = total - self.play_pos
             take = min(avail, remaining)
             out[write_pos:write_pos + take] = self.sound_array[self.play_pos:self.play_pos + take]
             self.play_pos += take
             write_pos += take
             remaining -= take
+
             if self.play_pos >= total:
-                self.play_pos = 0
+                self._handle_track_end()
+                if self._finished:
+                    break  # remaining frames stay silent (zeros)
+
         return out
 
     def signal_strength(self, current_freq):
@@ -369,7 +412,12 @@ def main():
     stations = []
     for s in config["stations"]:
         filepath = os.path.join(base_dir, s["file"])
-        st = Station(s["name"], s["frequency"], filepath, s.get("bandwidth", 0.3))
+        st = Station(
+            s["name"], s["frequency"], filepath,
+            bandwidth=s.get("bandwidth", 0.3),
+            loop=s.get("loop", True),
+            loop_delay=s.get("loop_delay", 0),
+        )
         stations.append(st)
 
     noise = NoiseGenerator(SAMPLE_RATE, CHANNELS)

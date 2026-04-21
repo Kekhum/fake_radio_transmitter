@@ -4,19 +4,24 @@
             "name": "Radio Wolnosc",
             "frequency": 91.2,
             "file": "music/radio_wolnosc.wav",
-            "bandwidth": 0.3
+            "bandwidth": 0.3,
+            "loop": true,
+            "loop_delay": 0
         },
         {
             "name": "Audycja Nocna",
             "frequency": 97.5,
             "file": "music/audycja_nocna.wav",
-            "bandwidth": 0.3
+            "bandwidth": 0.3,
+            "loop": true,
+            "loop_delay": 120
         },
         {
             "name": "Wiadomosci",
             "frequency": 103.8,
             "file": "music/wiadomosci.wav",
-            "bandwidth": 0.3
+            "bandwidth": 0.3,
+            "loop": false
         }
     ],
     "tuning": {
