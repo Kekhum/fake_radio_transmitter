@@ -23,6 +23,14 @@
                     "loop_delay": 0
                 },
                 {
+                    "name": "Radio Laura",
+                    "frequency": 95.2,
+                    "file": "music/laura.wav",
+                    "bandwidth": 0.3,
+                    "loop": true,
+                    "loop_delay": 0
+                },
+                {
                     "name": "Audycja Nocna",
                     "frequency": 97.5,
                     "file": "music/audycja_nocna.wav",

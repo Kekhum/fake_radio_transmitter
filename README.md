@@ -50,6 +50,8 @@ Następnie uruchom `radio.py` — stacje testowe na wszystkich zakresach będą 
 | ---------------- | ------------------------------------------ |
 | `<` (strzałka)   | Strojenie w dół (przytrzymaj = szybciej)   |
 | `>` (strzałka)   | Strojenie w górę (przytrzymaj = szybciej)  |
+| `^` (strzałka)   | Głośność w górę (krok 5%)                  |
+| `v` (strzałka)   | Głośność w dół (krok 5%)                   |
 | `Tab`            | Przełączanie zakresu (FM / AM / LW)        |
 | `ESC`            | Wyjście z programu                         |
 
