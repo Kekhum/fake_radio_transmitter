@@ -364,8 +364,9 @@ class RadioDisplay:
         pygame.display.flip()
 
     def _freq_to_x(self, freq, rect):
+        pad = 20  # inner padding so edge labels (88, 108) don't clip
         t = (freq - self.min_freq) / (self.max_freq - self.min_freq)
-        return int(rect.x + t * rect.width)
+        return int(rect.x + pad + t * (rect.width - 2 * pad))
 
 
 # ---------------------------------------------------------------------------
