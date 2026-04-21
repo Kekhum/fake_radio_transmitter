@@ -328,6 +328,17 @@ class RadioDisplay:
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+def detect_headless():
+    """Check if we should run without display (no screen available or --headless flag)."""
+    if "--headless" in sys.argv:
+        return True
+    # Try to detect missing display (typical on headless Raspberry Pi)
+    os.environ.setdefault("SDL_AUDIODRIVER", "alsa")
+    if not os.environ.get("DISPLAY") and sys.platform != "win32":
+        return True
+    return False
+
+
 def main():
     config = load_config()
     tuning = config["tuning"]
@@ -335,14 +346,23 @@ def main():
     max_freq = tuning["max_freq"]
     step = tuning["step"]
     current_freq = tuning.get("start_freq", min_freq)
+    headless = detect_headless()
 
     # Init pygame
-    pygame.init()
+    if headless:
+        os.environ["SDL_VIDEODRIVER"] = "dummy"
+        pygame.init()
+        screen = None
+        print("=== FM Radio Simulator (headless) ===")
+        print("Sterowanie: strzalki <> = strojenie, ESC/Ctrl+C = wyjscie")
+        print(f"Zakres: {min_freq} - {max_freq} MHz")
+    else:
+        pygame.init()
+        screen = pygame.display.set_mode((WINDOW_W, WINDOW_H))
+        pygame.display.set_caption("FM Radio Simulator")
+
     pygame.mixer.quit()
     pygame.mixer.init(frequency=SAMPLE_RATE, size=-16, channels=CHANNELS, buffer=AUDIO_BUFFER)
-
-    screen = pygame.display.set_mode((WINDOW_W, WINDOW_H))
-    pygame.display.set_caption("FM Radio Simulator")
 
     # Load stations
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -355,7 +375,7 @@ def main():
     noise = NoiseGenerator(SAMPLE_RATE, CHANNELS)
     mixer = RadioMixer(stations, noise, SAMPLE_RATE, CHANNELS)
     mixer.current_freq = current_freq
-    display = RadioDisplay(screen, config)
+    display = RadioDisplay(screen, config) if not headless else None
 
     clock = pygame.time.Clock()
 
@@ -376,66 +396,79 @@ def main():
     hold_timer = 0
     hold_started = False
 
+    # Headless: track last printed freq to avoid spam
+    last_printed_freq = None
+
     running = True
-    while running:
-        dt = clock.tick(FPS)
+    try:
+        while running:
+            dt = clock.tick(FPS)
 
-        # --- Events ---
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
+            # --- Events ---
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
                     running = False
-                elif event.key == pygame.K_LEFT:
-                    tuning_direction = -1
-                    current_freq = max(min_freq, round(current_freq - step, 1))
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        running = False
+                    elif event.key == pygame.K_LEFT:
+                        tuning_direction = -1
+                        current_freq = max(min_freq, round(current_freq - step, 1))
+                        hold_timer = 0
+                        hold_started = False
+                    elif event.key == pygame.K_RIGHT:
+                        tuning_direction = 1
+                        current_freq = min(max_freq, round(current_freq + step, 1))
+                        hold_timer = 0
+                        hold_started = False
+                elif event.type == pygame.KEYUP:
+                    if event.key in (pygame.K_LEFT, pygame.K_RIGHT):
+                        tuning_direction = 0
+                        hold_timer = 0
+                        hold_started = False
+
+            # --- Hold-to-tune ---
+            if tuning_direction != 0:
+                hold_timer += dt
+                if not hold_started and hold_timer >= HOLD_INITIAL_DELAY:
+                    hold_started = True
                     hold_timer = 0
-                    hold_started = False
-                elif event.key == pygame.K_RIGHT:
-                    tuning_direction = 1
-                    current_freq = min(max_freq, round(current_freq + step, 1))
-                    hold_timer = 0
-                    hold_started = False
-            elif event.type == pygame.KEYUP:
-                if event.key in (pygame.K_LEFT, pygame.K_RIGHT):
-                    tuning_direction = 0
-                    hold_timer = 0
-                    hold_started = False
+                if hold_started:
+                    # Continuous tuning
+                    steps_this_frame = max(1, int(hold_timer / HOLD_REPEAT_INTERVAL))
+                    hold_timer -= steps_this_frame * HOLD_REPEAT_INTERVAL
+                    for _ in range(steps_this_frame):
+                        current_freq += tuning_direction * step
+                    current_freq = round(max(min_freq, min(max_freq, current_freq)), 1)
 
-        # --- Hold-to-tune ---
-        if tuning_direction != 0:
-            hold_timer += dt
-            if not hold_started and hold_timer >= HOLD_INITIAL_DELAY:
-                hold_started = True
-                hold_timer = 0
-            if hold_started:
-                # Continuous tuning
-                steps_this_frame = max(1, int(hold_timer / HOLD_REPEAT_INTERVAL))
-                hold_timer -= steps_this_frame * HOLD_REPEAT_INTERVAL
-                for _ in range(steps_this_frame):
-                    current_freq += tuning_direction * step
-                current_freq = round(max(min_freq, min(max_freq, current_freq)), 1)
+            mixer.current_freq = current_freq
 
-        mixer.current_freq = current_freq
+            # --- Audio: queue next chunk when current finishes ---
+            if not channel.get_queue():
+                chunk = mixer.render_chunk(CHUNK_FRAMES)
+                snd = make_sound(chunk)
+                channel.queue(snd)
 
-        # --- Audio: queue next chunk when current finishes ---
-        if not channel.get_queue():
-            chunk = mixer.render_chunk(CHUNK_FRAMES)
-            snd = make_sound(chunk)
-            channel.queue(snd)
+            # --- Find current station info for display ---
+            best_signal = 0.0
+            best_name = ""
+            for st in stations:
+                sig = st.signal_strength(current_freq)
+                if sig > best_signal:
+                    best_signal = sig
+                    best_name = st.name
 
-        # --- Find current station info for display ---
-        best_signal = 0.0
-        best_name = ""
-        for st in stations:
-            sig = st.signal_strength(current_freq)
-            if sig > best_signal:
-                best_signal = sig
-                best_name = st.name
+            # --- Draw ---
+            if display:
+                display.draw(current_freq, best_signal, best_name)
+            elif current_freq != last_printed_freq:
+                sig_bar = "#" * int(best_signal * 15)
+                station_info = f"  [{best_name}]" if best_signal > 0.3 else ""
+                print(f"\r  {current_freq:>5.1f} MHz  |{sig_bar:<15}|{station_info}     ", end="", flush=True)
+                last_printed_freq = current_freq
 
-        # --- Draw ---
-        display.draw(current_freq, best_signal, best_name)
+    except KeyboardInterrupt:
+        print("\nZamykanie...")
 
     pygame.quit()
 
