@@ -376,7 +376,8 @@ def detect_headless():
     if "--headless" in sys.argv:
         return True
     # Try to detect missing display (typical on headless Raspberry Pi)
-    os.environ.setdefault("SDL_AUDIODRIVER", "alsa")
+    if sys.platform.startswith("linux"):
+        os.environ.setdefault("SDL_AUDIODRIVER", "alsa")
     if not os.environ.get("DISPLAY") and sys.platform != "win32":
         return True
     return False
