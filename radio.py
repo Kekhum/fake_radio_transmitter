@@ -86,26 +86,29 @@ class NoiseGenerator:
 # Station — wraps a pygame Sound with streaming position
 # ---------------------------------------------------------------------------
 class Station:
-    def __init__(self, name, frequency, filepath, bandwidth=0.3, loop=True, loop_delay=0):
+    def __init__(self, name, frequency, filepaths, bandwidth=0.3, loop=True, loop_delay=0):
         self.name = name
         self.freq = frequency
         self.bandwidth = bandwidth
-        self.filepath = filepath
         self.loop = loop
         self.loop_delay = loop_delay
         self.loaded = False
-        self.sound_array = None
+        # Playlist: list of numpy arrays, one per track
+        self._tracks = []
+        self._track_idx = 0
         self.play_pos = 0
         self._finished = False
         self._delay_remaining = 0
-        self._load()
+        self._load_all(filepaths)
 
-    def _load(self):
-        if not os.path.isfile(self.filepath):
-            print(f"[WARN] Brak pliku: {self.filepath} — stacja '{self.name}' wyciszona")
-            return
+    @staticmethod
+    def _load_file(filepath):
+        """Load a single audio file, return float32 stereo array or None."""
+        if not os.path.isfile(filepath):
+            print(f"[WARN] Brak pliku: {filepath}")
+            return None
         try:
-            snd = pygame.mixer.Sound(self.filepath)
+            snd = pygame.mixer.Sound(filepath)
             raw = pygame.sndarray.array(snd)
             if raw.dtype == np.int16:
                 arr = raw.astype(np.float32) / 32768.0
@@ -117,22 +120,47 @@ class Station:
                 arr = np.column_stack((arr, arr))
             elif arr.shape[1] == 1:
                 arr = np.column_stack((arr[:, 0], arr[:, 0]))
-            self.sound_array = arr
-            self.play_pos = 0
-            self.loaded = True
-            print(f"[OK] Zaladowano: {self.name} @ {self.freq} ({len(arr)/SAMPLE_RATE:.1f}s)")
+            return arr
         except Exception as e:
-            print(f"[ERR] Nie mozna zaladowac {self.filepath}: {e}")
+            print(f"[ERR] Nie mozna zaladowac {filepath}: {e}")
+            return None
 
-    def _handle_track_end(self):
-        if not self.loop:
-            self._finished = True
-            self.play_pos = len(self.sound_array)
-        elif self.loop_delay > 0:
-            self._delay_remaining = int(self.loop_delay * SAMPLE_RATE)
-            self.play_pos = 0
+    def _load_all(self, filepaths):
+        total_duration = 0.0
+        for fp in filepaths:
+            arr = self._load_file(fp)
+            if arr is not None:
+                self._tracks.append(arr)
+                total_duration += len(arr) / SAMPLE_RATE
+        if self._tracks:
+            self.loaded = True
+            n = len(self._tracks)
+            label = f"{n} plik{'i' if 1 < n < 5 else 'ow' if n >= 5 else ''}" if n > 1 else "1 plik"
+            print(f"[OK] Zaladowano: {self.name} @ {self.freq} ({label}, {total_duration:.1f}s)")
         else:
-            self.play_pos = 0
+            print(f"[WARN] Stacja '{self.name}' — brak plikow audio")
+
+    @property
+    def _current_track(self):
+        if not self._tracks:
+            return None
+        return self._tracks[self._track_idx]
+
+    def _advance_to_next_track(self):
+        """Move to next track in playlist. Returns False if playlist ended."""
+        self._track_idx += 1
+        self.play_pos = 0
+        if self._track_idx >= len(self._tracks):
+            # End of playlist
+            if not self.loop:
+                self._finished = True
+                return False
+            # Loop: restart playlist
+            self._track_idx = 0
+            if self.loop_delay > 0:
+                self._delay_remaining = int(self.loop_delay * SAMPLE_RATE)
+            return True
+        return True
 
     @property
     def is_silent(self):
@@ -144,20 +172,24 @@ class Station:
         if self._delay_remaining > 0:
             self._delay_remaining = max(0, self._delay_remaining - n_frames)
             return
-        new_pos = self.play_pos + n_frames
-        total = len(self.sound_array)
-        if new_pos >= total:
-            self._handle_track_end()
-            if not self._finished and self._delay_remaining == 0:
-                self.play_pos = new_pos % total
-        else:
-            self.play_pos = new_pos
+        remaining = n_frames
+        while remaining > 0:
+            track = self._current_track
+            if track is None:
+                break
+            avail = len(track) - self.play_pos
+            if remaining < avail:
+                self.play_pos += remaining
+                remaining = 0
+            else:
+                remaining -= avail
+                if not self._advance_to_next_track():
+                    break
 
     def get_frames(self, n_frames):
         if not self.loaded or self._finished:
             return np.zeros((n_frames, 2), dtype=np.float32)
         out = np.zeros((n_frames, 2), dtype=np.float32)
-        total = len(self.sound_array)
         remaining = n_frames
         write_pos = 0
         while remaining > 0:
@@ -167,15 +199,17 @@ class Station:
                 write_pos += silence
                 remaining -= silence
                 continue
-            avail = total - self.play_pos
+            track = self._current_track
+            if track is None:
+                break
+            avail = len(track) - self.play_pos
             take = min(avail, remaining)
-            out[write_pos:write_pos + take] = self.sound_array[self.play_pos:self.play_pos + take]
+            out[write_pos:write_pos + take] = track[self.play_pos:self.play_pos + take]
             self.play_pos += take
             write_pos += take
             remaining -= take
-            if self.play_pos >= total:
-                self._handle_track_end()
-                if self._finished:
+            if self.play_pos >= len(track):
+                if not self._advance_to_next_track():
                     break
         return out
 
@@ -209,9 +243,13 @@ class Band:
 
         self.stations = []
         for s in self.stations_config:
-            filepath = os.path.join(base_dir, s["file"])
+            # Support both "file" (single) and "playlist" (list)
+            if "playlist" in s:
+                filepaths = [os.path.join(base_dir, f) for f in s["playlist"]]
+            else:
+                filepaths = [os.path.join(base_dir, s["file"])]
             st = Station(
-                s["name"], s["frequency"], filepath,
+                s["name"], s["frequency"], filepaths,
                 bandwidth=s.get("bandwidth", 0.3),
                 loop=s.get("loop", True),
                 loop_delay=s.get("loop_delay", 0),

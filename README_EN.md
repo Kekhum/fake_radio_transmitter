@@ -106,10 +106,28 @@ The `stations.json` file defines bands and stations. Each band has its own tunin
 | ------------ | -------------------------------------------------------------------- | --------- |
 | `name`       | Station name displayed when signal is locked                         | —         |
 | `frequency`  | Station frequency (in the band's unit)                               | —         |
-| `file`       | Path to audio file (MP3/WAV/OGG) relative to project directory       | —         |
+| `file`       | Path to a single audio file                                          | —         |
+| `playlist`   | List of audio files played in sequence (instead of `file`)           | —         |
 | `bandwidth`  | Signal width — larger value = easier to find the station             | `0.3`     |
 | `loop`       | `true` = loop, `false` = play once then go silent                    | `true`    |
-| `loop_delay` | Silence gap in seconds between loops                                 | `0`       |
+| `loop_delay` | Silence gap in seconds between playlist repeats                      | `0`       |
+
+Use `file` for a single track or `playlist` for a queue:
+
+```json
+{
+    "name": "Radio Wolnosc",
+    "frequency": 91.2,
+    "playlist": [
+        "music/jingle.wav",
+        "music/song1.mp3",
+        "music/commercials.wav",
+        "music/song2.mp3"
+    ],
+    "bandwidth": 0.3,
+    "loop": true,
+    "loop_delay": 5
+}
 
 ## Project structure
 

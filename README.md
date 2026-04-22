@@ -106,10 +106,28 @@ Plik `stations.json` definiuje zakresy i stacje. Każdy zakres (`band`) ma włas
 | ------------ | -------------------------------------------------------------------- | --------- |
 | `name`       | Nazwa wyświetlana w UI po złapaniu sygnału                          | —         |
 | `frequency`  | Częstotliwość stacji (w jednostce zakresu)                           | —         |
-| `file`       | Ścieżka do pliku audio (MP3/WAV/OGG) względem katalogu projektu     | —         |
+| `file`       | Ścieżka do pojedynczego pliku audio                                 | —         |
+| `playlist`   | Lista plików audio odtwarzanych kolejno (zamiast `file`)             | —         |
 | `bandwidth`  | Szerokość pasma — im większa, tym łatwiej złapać stację             | `0.3`     |
 | `loop`       | `true` = zapętla, `false` = gra raz i milknie                       | `true`    |
-| `loop_delay` | Przerwa w sekundach ciszy między powtórzeniami                       | `0`       |
+| `loop_delay` | Przerwa w sekundach ciszy między powtórzeniami playlisty             | `0`       |
+
+Użyj `file` dla pojedynczego pliku albo `playlist` dla kolejki utworów:
+
+```json
+{
+    "name": "Radio Wolnosc",
+    "frequency": 91.2,
+    "playlist": [
+        "music/jingle.wav",
+        "music/piosenka1.mp3",
+        "music/reklamy.wav",
+        "music/piosenka2.mp3"
+    ],
+    "bandwidth": 0.3,
+    "loop": true,
+    "loop_delay": 5
+}
 
 ## Struktura projektu
 
