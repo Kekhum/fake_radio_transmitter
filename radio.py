@@ -10,6 +10,7 @@ import json
 import math
 import os
 import sys
+import time
 import numpy as np
 import pygame
 
@@ -347,7 +348,7 @@ class RadioDisplay:
         self.BAND_ACTIVE = (255, 200, 80)
         self.BAND_INACTIVE = (80, 75, 65)
 
-    def draw(self, band, bands, signal_strength, station_name, volume):
+    def draw(self, band, bands, signal_strength, station_name, volume, gpio_status=None):
         self.screen.fill(self.BG)
 
         # --- Band selector ---
@@ -435,6 +436,22 @@ class RadioDisplay:
         vol_pct = self.font_sm.render(f"{int(volume * 100)}%", True, self.TEXT_DIM)
         self.screen.blit(vol_pct, (vol_x + vol_bar_w + 8, vol_bar_y - 2))
 
+        # --- GPIO indicator (top right) ---
+        if gpio_status is not None:
+            since_activity = time.monotonic() - gpio_status["last_activity"]
+            # Pulse green for 0.3s on activity, then dim grey "idle"
+            if since_activity < 0.3:
+                dot_color = (80, 255, 80)
+                txt_color = (180, 220, 180)
+            else:
+                dot_color = (80, 110, 80)
+                txt_color = (110, 130, 110)
+            gx = WINDOW_W - 80
+            gy = 22
+            pygame.draw.circle(self.screen, dot_color, (gx, gy + 8), 6)
+            label = self.font_sm.render(f"GPIO ({gpio_status['events']})", True, txt_color)
+            self.screen.blit(label, (gx + 12, gy))
+
         # --- Controls hint ---
         hint = self.font_sm.render("[<] [>] strojenie  [^] [v] glosnosc  [Tab] zakres  [ESC] wyjscie", True, (80, 75, 65))
         self.screen.blit(hint, (WINDOW_W // 2 - hint.get_width() // 2, WINDOW_H - 30))
@@ -458,6 +475,8 @@ class GpioController:
         self._last_steps = 0
         self._tune_delta = 0
         self._button_pressed = False
+        self.last_activity = 0.0   # monotonic time of last event
+        self.total_events = 0      # cumulative count for debug
         self.encoder.when_rotated = self._on_rotate
         self.button = None
         if pin_button is not None:
@@ -471,9 +490,15 @@ class GpioController:
         delta = self.encoder.steps - self._last_steps
         self._last_steps = self.encoder.steps
         self._tune_delta += delta
+        self.last_activity = time.monotonic()
+        self.total_events += 1
+        print(f"[GPIO] ENC: {'+' if delta > 0 else ''}{delta} (total events: {self.total_events})")
 
     def _on_press(self):
         self._button_pressed = True
+        self.last_activity = time.monotonic()
+        self.total_events += 1
+        print(f"[GPIO] BTN press (total events: {self.total_events})")
 
     def consume_tune(self):
         d = self._tune_delta
@@ -652,7 +677,13 @@ def main():
 
             # Draw
             if display:
-                display.draw(active_band, bands, best_signal, best_name, mixer._volume)
+                gpio_status = None
+                if gpio is not None:
+                    gpio_status = {
+                        "last_activity": gpio.last_activity,
+                        "events": gpio.total_events,
+                    }
+                display.draw(active_band, bands, best_signal, best_name, mixer._volume, gpio_status)
             else:
                 state = (active_band.key, active_band.current_freq, mixer._volume)
                 if state != last_printed_state:
