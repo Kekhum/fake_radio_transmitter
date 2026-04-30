@@ -13,6 +13,13 @@ import sys
 import numpy as np
 import pygame
 
+# Optional GPIO support (Raspberry Pi only)
+try:
+    from gpiozero import RotaryEncoder, Button
+    GPIO_AVAILABLE = True
+except Exception:
+    GPIO_AVAILABLE = False
+
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
@@ -441,6 +448,50 @@ class RadioDisplay:
 
 
 # ---------------------------------------------------------------------------
+# GPIO controller — rotary encoder with push button
+# ---------------------------------------------------------------------------
+class GpioController:
+    """Reads a rotary encoder + push button. Thread-safe via simple flags."""
+
+    def __init__(self, pin_a=17, pin_b=27, pin_button=None):
+        self.encoder = RotaryEncoder(pin_a, pin_b, max_steps=0)
+        self._last_steps = 0
+        self._tune_delta = 0
+        self._button_pressed = False
+        self.encoder.when_rotated = self._on_rotate
+        self.button = None
+        if pin_button is not None:
+            self.button = Button(pin_button, pull_up=True, bounce_time=0.05)
+            self.button.when_pressed = self._on_press
+            print(f"[GPIO] Enkoder: A=GPIO{pin_a}, B=GPIO{pin_b}, SW=GPIO{pin_button}")
+        else:
+            print(f"[GPIO] Enkoder: A=GPIO{pin_a}, B=GPIO{pin_b} (bez przycisku)")
+
+    def _on_rotate(self):
+        delta = self.encoder.steps - self._last_steps
+        self._last_steps = self.encoder.steps
+        self._tune_delta += delta
+
+    def _on_press(self):
+        self._button_pressed = True
+
+    def consume_tune(self):
+        d = self._tune_delta
+        self._tune_delta = 0
+        return d
+
+    def consume_button(self):
+        b = self._button_pressed
+        self._button_pressed = False
+        return b
+
+    def close(self):
+        self.encoder.close()
+        if self.button is not None:
+            self.button.close()
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 def detect_headless():
@@ -483,6 +534,20 @@ def main():
     mixer.all_bands = bands
     mixer.active_band = active_band
     display = RadioDisplay(screen) if not headless else None
+
+    # GPIO (Raspberry Pi only)
+    gpio = None
+    gpio_cfg = config.get("gpio", {})
+    if GPIO_AVAILABLE and gpio_cfg.get("enabled", False):
+        try:
+            gpio = GpioController(
+                pin_a=gpio_cfg.get("encoder_a", 17),
+                pin_b=gpio_cfg.get("encoder_b", 27),
+                pin_button=gpio_cfg.get("encoder_button"),  # None = brak
+            )
+        except Exception as e:
+            print(f"[GPIO] Nie udalo sie zainicjowac: {e}")
+            gpio = None
 
     clock = pygame.time.Clock()
     channel = pygame.mixer.Channel(0)
@@ -542,6 +607,19 @@ def main():
                         hold_timer = 0
                         hold_started = False
 
+            # GPIO input
+            if gpio is not None:
+                delta = gpio.consume_tune()
+                if delta != 0:
+                    new_freq = active_band.current_freq + delta * active_band.step
+                    active_band.current_freq = round(
+                        max(active_band.min_freq, min(active_band.max_freq, new_freq)), 1
+                    )
+                if gpio.consume_button():
+                    band_idx = (band_idx + 1) % len(bands)
+                    active_band = bands[band_idx]
+                    mixer.active_band = active_band
+
             # Hold-to-tune
             if tuning_direction != 0:
                 hold_timer += dt
@@ -588,6 +666,8 @@ def main():
     except KeyboardInterrupt:
         print("\nZamykanie...")
 
+    if gpio is not None:
+        gpio.close()
     pygame.quit()
 
 

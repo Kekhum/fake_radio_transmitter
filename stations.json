@@ -1,4 +1,9 @@
 {
+    "gpio": {
+        "enabled": true,
+        "encoder_a": 17,
+        "encoder_b": 27
+    },
     "bands": [
         {
             "name": "UKF (FM)",
